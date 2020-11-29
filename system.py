@@ -24,9 +24,12 @@ class System():
         self.bl = self.el/10 # side length of square ball. 
         
         self.G = 9.8 # Force of gravity
+        self.G = 98 # Force of gravity
         self.Mb = 1
         self.Mp = 10
-        
+       
+        #TODO: Make this less add-hock.
+        self.col_margin = 0.002*self.el 
         
         # Lets set up our state vector.
         x = sym.Function('x')(self.t)
@@ -115,8 +118,10 @@ class System():
         dldqd = sym.Matrix([self.LG]).jacobian(self.qd).subs(sym_subs)
         H = self.compute_H(self.LG, self.q).subs(sym_subs)        
         
-        self.cols_equs_s
-        for c in self.cols_equs:
+        self.cols_equs_s = []
+        for c in self.col_equs:
+            
+            c = sym.Matrix([c])
             dphidq = c.jacobian(q).subs(sym_subs)
             
             # Lets build equation 1:
@@ -125,8 +130,7 @@ class System():
             # Lets build equation 2:
             eq2 = sym.Eq(sym.Matrix([0]), H.subs(sym_subs_p) - H)
             
-            self.cols_equs_s.append([eq1, eq2])  
-
+            self.cols_equs_s.append([eq1, eq2]) 
     def compute_collision(self,s,n):
         """! Compute the collision update for a particular collision.
         This function is meant to be called during the simulation process in 
@@ -140,25 +144,31 @@ class System():
         @returns the post-collision system state variable
         """
         lamb = sym.symbols('lambda')
+        update_subs = {self.q_dum[0]:s[0],
+                       self.q_dum[1]:s[1], 
+                       self.q_dum[2]:s[2], 
+                       self.q_dum[3]:s[3], 
+                       self.qd_dum[0]:s[4], 
+                       self.qd_dum[1]:s[5], 
+                       self.qd_dum[2]:s[6], 
+                       self.qd_dum[3]:s[7]}
         eq1 = self.cols_equs_s[n][0].subs(update_subs) 
         eq2 = self.cols_equs_s[n][1].subs(update_subs) 
-    
         sols = sym.solve([eq1, eq2],self.qd_dum_p + [lamb], dict = True)
-
         # Lets pick only the non-trivial solution. 
         sol = ''
-        for s in sols:
-            if s[lamb]!=0:
-                sol = s 
-
+        for i  in sols:
+            if abs(i[lamb])> 10**-10:
+                sol = i 
+        self.log(sol) 
         return([s[0],
                 s[1],
                 s[2],
                 s[3],
-                sol[self.dq_dum_p[0]],
-                sol[self.dq_dum_p[1]],
-                sol[self.dq_dum_p[2]],
-                sol[self.dq_dum_p[3]]])
+                sol[self.qd_dum_p[0]],
+                sol[self.qd_dum_p[1]],
+                sol[self.qd_dum_p[2]],
+                sol[self.qd_dum_p[3]]])
 
         
          
@@ -210,106 +220,108 @@ class System():
         C = []
         def temp(s): 
             loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb0*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] <= self.el )
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] and loc[0]<= self.el )
         C.append(temp)
         def temp(s): 
             loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb0*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[0]) and 0 <= loc[1] <= self.el )
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            return(self.col_margin > abs(loc[0]) and 0 <= loc[1] and loc[1]<= self.el )
         C.append(temp)
         def temp(s): 
             loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb0*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] <= self.el )
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            self.log(loc)
+            return(self.col_margin > abs(loc[1]) and -self.el <= loc[0] and loc[0] <= 0 )
         C.append(temp)
         def temp(s): 
             loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb0*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[0]) and 0 <= loc[1] <= self.el )
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            return(self.col_margin > abs(loc[0]) and -self.el <= loc[1] and loc[1]<= 0 )
         C.append(temp)
         def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_pp1)*self.g_wb*self.g_bb0*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] <= self.pl )
+            loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb0*vec_z
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            self.log(loc)
+            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] and loc[0]<= self.pl )
         C.append(temp)
         
         def temp(s): 
             loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb1*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] <= self.el )
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] and loc[0]<= self.el )
         C.append(temp)
         def temp(s): 
             loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb1*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[0]) and 0 <= loc[1] <= self.el )
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            return(self.col_margin > abs(loc[0]) and 0 <= loc[1] and loc[1]<= self.el )
         C.append(temp)
         def temp(s): 
             loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb1*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] <= self.el )
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            return(self.col_margin > abs(loc[1]) and -self.el <= loc[0] and loc[0]<= 0 )
         C.append(temp)
         def temp(s): 
             loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb1*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[0]) and 0 <= loc[1] <= self.el )
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            return(self.col_margin > abs(loc[0]) and -self.el <= loc[1] and loc[1]<= 0 )
         C.append(temp)
-        def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_pp1)*self.g_wb*self.g_bb1*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] <= self.pl )
+        def temp(s): #9 
+            loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb1*vec_z
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] and loc[0]<= self.pl )
         C.append(temp)
         
         def temp(s): 
             loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb2*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] <= self.el )
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] and loc[0]<= self.el )
         C.append(temp)
         def temp(s): 
             loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb2*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[0]) and 0 <= loc[1] <= self.el )
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            return(self.col_margin > abs(loc[0]) and 0 <= loc[1] and loc[1]<= self.el )
         C.append(temp)
         def temp(s): 
             loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb2*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] <= self.el )
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            return(self.col_margin > abs(loc[1]) and -self.el <= loc[0] and loc[0]<= 0 )
         C.append(temp)
         def temp(s): 
             loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb2*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[0]) and 0 <= loc[1] <= self.el )
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            return(self.col_margin > abs(loc[0]) and -self.el <= loc[1] and loc[1]<= 0 )
         C.append(temp)
         def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_pp1)*self.g_wb*self.g_bb2*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] <= self.pl )
+            loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb2*vec_z
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] and loc[0]<= self.pl )
         C.append(temp)
         
         def temp(s): 
             loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb3*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] <= self.el )
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] and loc[0]<= self.el )
         C.append(temp)
         def temp(s): 
             loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb3*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[0]) and 0 <= loc[1] <= self.el )
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            return(self.col_margin > abs(loc[0]) and 0 <= loc[1] and loc[1]<= self.el )
         C.append(temp)
         def temp(s): 
             loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb3*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] <= self.el )
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            return(self.col_margin > abs(loc[1]) and -self.el <= loc[0] and loc[0]<= 0 )
         C.append(temp)
         def temp(s): 
             loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb3*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[0]) and 0 <= loc[1] <= self.el )
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            return(self.col_margin > abs(loc[0]) and -self.el <= loc[1] and loc[1]<= 0 )
         C.append(temp)
         def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_pp1)*self.g_wb*self.g_bb3*vec_z
-            loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] <= self.pl )
+            loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb3*vec_z
+            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
+            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] and loc[0]<= self.pl )
         C.append(temp)
         
         self.col_cons = C
@@ -353,6 +365,7 @@ class System():
         
         F = [self.F[0], self.F[3]]
         q_e = [q[0], q[1], q[2], q[3], qd[0], qd[1], qd[2], qd[3]]
+        
         x_dd = sym.lambdify([t] + q_e + F, sols[qdd[0]], "numpy")
         
         y_dd = sym.lambdify([t] + q_e + F, sols[qdd[1]], "numpy")
@@ -464,10 +477,10 @@ class System():
         return(EL)
 
     
-    def dyn(self, s, t):
+    def dyn(self, s, F = [0,0]):
         """! Computes time derivative of the extended state vector for the system.
         @param s the vector [states, state derivatives]
-        @param t the current simulation time.
+        @param F force vector for the system state [ball x force, plate toruqe]
         @returns s the vector [state derivatives, state second derivatives]
         STATUS: COMPLETED, UNTESTED.
         """
@@ -475,12 +488,12 @@ class System():
                          s[5],
                          s[6],
                          s[7],
-                         self.qddl[0](t, *s),
-                         self.qddl[1](t, *s),
-                         self.qddl[2](t, *s),
-                         self.qddl[3](t, *s)])
+                         self.qddl[0](0, *s,*F),
+                         self.qddl[1](0, *s,*F),
+                         self.qddl[2](0, *s,*F),
+                         self.qddl[3](0, *s,*F)])
         return(s_new)
-    def collision_update(s, n):
+    def collision_update(self, s, n):
         """! The dyn equivilent for collisions. 
         Currently this just wraps the compute_collision function. 
         @param s, the state vector to use in computing the update.
@@ -528,15 +541,15 @@ class System():
         return(KE[0] - V)
     
 
-    def compute_H(L, q):
+    def compute_H(self, L, q):
         """ Computes the hamiltonian using sympy. 
         @param: L the system's legrangian. 
         @param: q the system's state variables.
         @returns: the EL equation.
         """
         import sympy #At this point I make no appologies. 
-        
-        qd = q.diff(t)
+         
+        qd = q.diff(self.t)
         
         L_mat = sym.Matrix([L])
         

@@ -9,25 +9,29 @@ root = Tk()
 class gui():
 
     def __init__(self):
+        
         self.VERBOSITY = 3 
         self.width = 410 # width of canvas. 
         self.height = 410 # height of canvas. 
         #self.setup_simulation()
         #self.run_simulation() 
         self.sys = System()
-        self.state = [0,200,np.pi/4,0]
+        self.state = [0,200,np.pi/5,0, 0,-100,0,0]
         self.dt = 0.01 # how long to jump each simulation time step.
 
         self.g_cw = self.sys.build_G(self.sys.build_R(-np.pi),[self.width/2,self.height,0])
         root = self.create_gui()
-        draw = threading.Thread(target = self.animate_canvas)
-        simulate = threading.Thread(target = self.simulate_system)
+        stop = threading.Event()
+        draw = threading.Thread(target = self.animate_canvas, args = (stop,))
+        simulate = threading.Thread(target = self.simulate_system, args = (stop,))
         
-        draw.start()
-        simulate.start()
-        root.mainloop()
-
-    def simulate_system(self):
+        try:
+            draw.start()
+            simulate.start()
+            root.mainloop()
+        finally:
+            stop.set()  
+    def simulate_system(self, kill_thread):
         """ 
         #TODO: add docstring. 
         This function will throttle if the simulation time begins to run faster
@@ -37,13 +41,14 @@ class gui():
         t = 0
         traj = [self.state]
         state_old = self.state # Used in computing the impact equation
-        while(True):
+        while(not kill_thread.is_set()):
             # Used for throttling 
             end = time.time() + self.dt
             
             t += self.dt 
-            col = self.sys.check_collisions()
+            col = self.sys.check_collisions(self.state)
             if col > 0 :
+                self.log("COLLISION #{}".format(col), 3)
                 s = self.sys.collision_update(state_old, col)
             else:
                 s = self.sys.integrate(self.state,self.dt)
@@ -52,14 +57,14 @@ class gui():
                 state_old = self.state
                 self.state = s
                 traj.append(s)
-                log(s, 3)
+                self.log(s, 3)
             
             # If we have time left in the loop, sleep till next draw needed.
             if end - time.time() -.0001 > 0:
                 time.sleep(end - time.time())
 
  
-    def animate_canvas(self):
+    def animate_canvas(self, kill_thread):
         """! Thread for drawing the canvas based on the system state. 
         This function is meant to be called in a seperate thread after the 
         system and gui have both been set up, but before the tkinter mainloop
@@ -70,7 +75,7 @@ class gui():
         that is responsible for actually showing the system's motion on screen.
         """
         delay = 1.0/60
-        while(True):
+        while(not kill_thread.is_set()):
             end = time.time() + delay
             ball_new, plate_new =self.update_canvas(self.state)
             self.canvas.delete(self.ball)
