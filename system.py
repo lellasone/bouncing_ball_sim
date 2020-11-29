@@ -216,7 +216,45 @@ class System():
         self.col_equs = C
         
         # Lets define the collision conditions. The order of these within the list must
-        # correspond to the ordering of the condition equations. 
+        # correspond to the ordering of the condition equations.
+        class CollisionCheckLine:
+            def __init__(self, q, s_init  transform, impact_dir, extent_dir, limits):
+                """! Check if a point has impacted a line. 
+                This class checks for impacts between a point and a line in the
+                world. It is assumed that the line is straight and that the 
+                transform provided is such that the point's position in some
+                axis is zero when the impact takes place. 
+    
+                @param q, symbolic state vector of the system. 
+                @param s_init, numeric state vector of the system at start.
+                @param transform, the transform such that the two colliding 
+                                  objects share a reference frame. 
+                @param impact_dir, index of the position vector which is 
+                                   perpendicular to the line being checked. 
+                @param extent_dir, index on which to check if the impact point
+                                   is within the line. (paralell to line)
+                @param limits, array in the form [start of line, end of line]
+                """
+                self.impact_dir = impact_dir
+                self.extent_dir = extent_dir
+                self.limits = limits
+                self.get_position = sym.lambdify(transform, q*)
+                self.last_position = self.get_position(s_init[0:4])
+
+            def check(self, s):
+                # TODO: Document. 
+                position = self.get_position(s[0:4])
+                vel = np.dot(self.position - self.last_position,
+                             self.position - self.last_position)
+                margin = vel * 0.8 
+                print(margin)
+                hit_line = (margin > abs(position[self.impact_dir])
+                loc = position[self.extent_dir]
+                within_line = self.limits[0] <= loc and loc <= self.limits[1]
+                return(hit_line and within_line) 
+                
+                 
+            
         C = []
         def temp(s): 
             loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb0*vec_z
