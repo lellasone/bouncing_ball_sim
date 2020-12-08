@@ -36,8 +36,9 @@ class gui():
         self.inner = PID(0, 0, 0, 0) # These are not safe defaults, change
         self.outer = PID(0, 0, 0, 0) # during system bringup.  
         self.outer.output_limits = (-np.pi/8, np.pi/8)
-        self.wind_scale = -0.5
-        self.plate_goal = 0 
+        self.wind_scale = -0.1
+        self.plate_goal = 0
+        self.control_defaults = [1500, 100, -.1, -.05]
 
 
         root = self.create_gui()
@@ -66,6 +67,8 @@ class gui():
                 self.log("Invalid Input",2)
             self.sample_time = self.dt
             self.plate_goal = self.outer(self.state[0])
+            print(self.plate_goal)
+            print(self.state)
           
 
               # Handle inner loop 
@@ -177,7 +180,7 @@ class gui():
     def update_canvas(self,s):
         """! ns A tuple containing the ball and plate objects.
         """
-        scale = self.scale # Honestly this is just so the lines fit
+        scale = self.scale # Honestly this is just so the text fits
 
         subs = {self.sys.q[0]:s[0],
                 self.sys.q[1]:s[1],
@@ -292,10 +295,10 @@ class gui():
 
         # Build Controller Interface
         control = Frame(interface)
-        self.Kp_i = DoubleVar(control)
-        self.Kd_i = DoubleVar(control)
-        self.Kp_o = DoubleVar(control)
-        self.Ki_o = DoubleVar(control)
+        self.Kp_i = DoubleVar(control, value = self.control_defaults[0])
+        self.Kd_i = DoubleVar(control, value = self.control_defaults[1])
+        self.Kp_o = DoubleVar(control, value = self.control_defaults[2])
+        self.Ki_o = DoubleVar(control, value = self.control_defaults[3])
         label_kpi = Label(control, text = "KP - Inner Loop")
         label_kdi = Label(control, text = "KD - Inner Loop")
         label_kpo = Label(control, text = "KP - Outer Loop")

@@ -51,7 +51,7 @@ class System():
         
         # Lets define the collision equations. 
         self.define_collisions()
-        self.cols_l = self.define_collision_updates()
+        self.define_collision_updates()
         
         # Lets define some external forces. 
         Fx, Fphi = sym.symbols('F_x, \tou')
@@ -74,12 +74,7 @@ class System():
         print("Solutions Computed")
 
     def define_collision_updates(self):
-        """! Produce an array of equatins for computing the impact update.
-        This function takes the array of impact update equations and produces
-        an n x 2 array containing, for each impact case, the two equations used
-        to solve the impact update. These equations will already have dummy 
-        variables subsituted in. This function MUST be called before any 
-        impact updates are computed. 
+        """! 
         """
         self.log("Defining Collision Updates", 2)
         q = self.q
@@ -159,7 +154,6 @@ class System():
         sols = sym.solve([eq1, eq2],self.qd_dum_p + [lamb], dict = True)
         # Lets pick only the non-trivial solution. 
         sol = ''
-        print(sols)
         for i  in sols:
             if abs(i[lamb])> 10**-9:
                 sol = i 
@@ -190,36 +184,6 @@ class System():
         self.log("defining collisions", 2)
         vec_z = sym.Matrix([0,0,0,1])
         
-        # Lets define the collision equations. 
-        C = []
-        C.append((self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb0*vec_z)[1])
-        C.append((self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb0*vec_z)[0])
-        C.append((self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb0*vec_z)[1])
-        C.append((self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb0*vec_z)[0])
-        C.append((self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb0*vec_z)[1])
-        
-        C.append((self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb1*vec_z)[1])
-        C.append((self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb1*vec_z)[0])
-        C.append((self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb1*vec_z)[1])
-        C.append((self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb1*vec_z)[0])
-        C.append((self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb1*vec_z)[1])
-        
-        C.append((self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb2*vec_z)[1])
-        C.append((self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb2*vec_z)[0])
-        C.append((self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb2*vec_z)[1])
-        C.append((self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb2*vec_z)[0])
-        C.append((self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb2*vec_z)[1])
-        
-        C.append((self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb3*vec_z)[1])
-        C.append((self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb3*vec_z)[0])
-        C.append((self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb3*vec_z)[1])
-        C.append((self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb3*vec_z)[0])
-        C.append((self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb3*vec_z)[1])
-        
-        self.col_equs = C
-        
-        # Lets define the collision conditions. The order of these within the list must
-        # correspond to the ordering of the condition equations.
         G = self.G
         scale = self.col_scale
         pw = self.pw
