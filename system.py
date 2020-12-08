@@ -27,8 +27,8 @@ class System():
         self.Mb = 1
         self.Mp = 10
        
-        #TODO: Make this less add-hock.
-        self.col_scale = 4 
+        #TODO: Collision distance tolerance for absolute collisions
+        self.col_scale = 4
         
         # Lets set up our state vector.
         x = sym.Function('x')(self.t)
@@ -118,9 +118,10 @@ class System():
         H = self.compute_H(self.LG, self.q).subs(sym_subs)        
         
         self.cols_equs_s = []
-        for c in self.col_equs:
-            
-            c = sym.Matrix([c])
+        for e in self.col_cons:
+             
+            c = sym.Matrix([e.equation])
+            print(c)
             dphidq = c.jacobian(q).subs(sym_subs)
             
             # Lets build equation 1:
@@ -129,7 +130,8 @@ class System():
             # Lets build equation 2:
             eq2 = sym.Eq(sym.Matrix([0]), H.subs(sym_subs_p) - H)
             
-            self.cols_equs_s.append([eq1, eq2]) 
+            e.col_update_equ = [eq1, eq2]
+ 
     def compute_collision(self,s,n):
         """! Compute the collision update for a particular collision.
         This function is meant to be called during the simulation process in 
@@ -143,6 +145,7 @@ class System():
         @returns the post-collision system state variable
         """
         lamb = sym.symbols('lambda')
+        equations = self.col_cons[n].col_update_equ
         update_subs = {self.q_dum[0]:s[0],
                        self.q_dum[1]:s[1], 
                        self.q_dum[2]:s[2], 
@@ -151,13 +154,14 @@ class System():
                        self.qd_dum[1]:s[5], 
                        self.qd_dum[2]:s[6], 
                        self.qd_dum[3]:s[7]}
-        eq1 = self.cols_equs_s[n][0].subs(update_subs) 
-        eq2 = self.cols_equs_s[n][1].subs(update_subs) 
+        eq1 = equations[0].subs(update_subs) 
+        eq2 = equations[1].subs(update_subs) 
         sols = sym.solve([eq1, eq2],self.qd_dum_p + [lamb], dict = True)
         # Lets pick only the non-trivial solution. 
         sol = ''
+        print(sols)
         for i  in sols:
-            if abs(i[lamb])> 10**-10:
+            if abs(i[lamb])> 10**-9:
                 sol = i 
         self.log(sol) 
         return([np.float64(s[0]),
@@ -176,7 +180,7 @@ class System():
         """
         
         for i, c in enumerate (self.col_cons):
-            if(c.check(s, dt)):
+            if(c.check(s, dt, i)):
                 return(i)
         return(-1)
         
@@ -218,13 +222,27 @@ class System():
         # correspond to the ordering of the condition equations.
         G = self.G
         scale = self.col_scale
+        pw = self.pw
         class CheckLine:
-            def __init__(self, q,  transform, impact_dir, extent_dir, limits):
+            def __init__(self, 
+                         q,  
+                         transform, 
+                         impact_dir, 
+                         extent_dir, 
+                         limits,
+                         approach_dir = 0,
+                         directional_margin = pw*.5):
                 """! Check if a point has impacted a line. 
                 This class checks for impacts between a point and a line in the
                 world. It is assumed that the line is straight and that the 
                 transform provided is such that the point's position in some
-                axis is zero when the impact takes place. 
+                axis is zero when the impact takes place. Depending on the 
+                approach_dir value either directional collisions (true if the 
+                point is passed the collision axis) or absolute collisions 
+                (true if the point is near the collision axis) can be used.
+
+                Note: Where possible directional collisons (approach_dir != 0)
+                      should be used, as these are more robust. 
     
                 @param q, symbolic state vector of the system. 
                 @param transform, the transform such that the two colliding 
@@ -234,29 +252,59 @@ class System():
                 @param extent_dir, index on which to check if the impact point
                                    is within the line. (paralell to line)
                 @param limits, array in the form [start of line, end of line]
+                @param approach_dir, -1 if the object is allowed to be on the 
+                                     negative side of the axis, 1 if allowed
+                                     to be on the positive side of the axis.
+                                     0 if both sides allowable. 
+                @param directional_margin, How far behind a line to count 
+                                           directional collisions. 
                 """
                 self.impact_dir = impact_dir
                 self.extent_dir = extent_dir
                 self.limits = limits
+                self.approach_dir = approach_dir
+                self.dir_margin = directional_margin
+                self.col_update_equ = [] # This stores update equations
                 self.equation = transform[impact_dir] # Used to compute update 
                 self.get_position = sym.lambdify([q[0],q[1],q[2],q[3]],
                                                  transform,
                                                  "numpy")
                 self.first = True
-
-            def check(self, s, dt):
-                # TODO: Documet. 
-                position = self.get_position(*list(s[0:4]))
-                if self.first:
-                    self.first = False
-                    self.last_position = position
-                    return(False)
-                vel = np.sqrt(np.dot(np.transpose(position - self.last_position),
-                             position - self.last_position))
-                vel = np.linalg.norm(position-self.last_position)
-                margin = (vel+G*dt) * scale  * dt 
                 
-                hit_line = (margin > abs(position[self.impact_dir]))
+
+            def check(self, s, dt, i):
+                """ This function checks if a collision has occured. 
+                @param s, the current system state vecotor. 
+                @param dt, the current timestep size. 
+                @param i, the collision index (this is a way of passing in
+                          logging values for debug purposes)
+                @returns True, if a collision has occured. False otherwise. 
+                """
+                position = self.get_position(*list(s[0:4]))
+                
+                hit_line = False
+                if self.approach_dir != 0: 
+                    # Check for directional collison 
+                    behind_line = position[self.impact_dir] * self.approach_dir < 0
+                    # Check we are within a reasonable distance of the wall
+                    near_line = abs(position[self.impact_dir]) < self.dir_margin
+                    hit_line = near_line * behind_line
+                else:
+                    # Check for non-directional collision 
+                    if self.first:
+                        # Ignore first timestep
+                        self.first = False
+                        self.last_position = position
+                        return(False)
+                    # Compute velocity-based tolerance
+                    vel = np.sqrt(np.dot(np.transpose(position - self.last_position),
+                                 position - self.last_position))
+                    vel = np.linalg.norm(position-self.last_position)
+                    margin = (vel+G*dt) * scale  * dt 
+                    # Determine if line hit
+                    hit_line = (margin > abs(position[self.impact_dir]))
+
+
                 loc = position[self.extent_dir]
                 within_line = self.limits[0] <= loc and loc <= self.limits[1]
                 return(hit_line and within_line) 
@@ -266,42 +314,42 @@ class System():
         C = []
         # 0 - 4, P0 
         loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb0*vec_z
-        C. append(CheckLine(self.q, loc, 1, 0, [0, self.el]))
-        C. append(CheckLine(self.q, loc, 0, 1, [0, self.el]))     
+        C. append(CheckLine(self.q, loc, 1, 0, [0, self.el], 1))
+        C. append(CheckLine(self.q, loc, 0, 1, [0, self.el], 1))     
         loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb0*vec_z        
-        C. append(CheckLine(self.q, loc, 1, 0, [-self.el, 0]))     
-        C. append(CheckLine(self.q, loc, 0, 1, [-self.el, 0]))     
+        C. append(CheckLine(self.q, loc, 1, 0, [-self.el, 0], -1))     
+        C. append(CheckLine(self.q, loc, 0, 1, [-self.el, 0], -1))     
         loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb0*vec_z
-        C.append(CheckLine(self.q, loc, 1, 0, [0, self.pl]))     
+        C.append(CheckLine(self.q, loc, 1, 0, [0, self.pl], 1))     
        
         # 5 - 9, P1  
         loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb1*vec_z
-        C. append(CheckLine(self.q, loc, 1, 0, [0, self.el]))     
-        C. append(CheckLine(self.q, loc, 0, 1, [0, self.el]))     
+        C. append(CheckLine(self.q, loc, 1, 0, [0, self.el], 1))     
+        C. append(CheckLine(self.q, loc, 0, 1, [0, self.el], 1))     
         loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb1*vec_z
-        C. append(CheckLine(self.q,loc, 1, 0, [-self.el, 0]))     
-        C. append(CheckLine(self.q, loc, 0, 1, [-self.el, 0]))     
+        C. append(CheckLine(self.q,loc, 1, 0, [-self.el, 0], -1))     
+        C. append(CheckLine(self.q, loc, 0, 1, [-self.el, 0], -1))     
         loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb1*vec_z
-        C. append(CheckLine(self.q, loc, 1, 0, [0, self.pl]))     
+        C. append(CheckLine(self.q, loc, 1, 0, [0, self.pl], 1))     
          # 9 - 14, P2  
         loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb2*vec_z
-        C. append(CheckLine(self.q,  loc, 1, 0, [0, self.el]))     
-        C. append(CheckLine(self.q, loc, 0, 1, [0, self.el]))     
+        C. append(CheckLine(self.q,  loc, 1, 0, [0, self.el], 1))     
+        C. append(CheckLine(self.q, loc, 0, 1, [0, self.el], 1))     
         loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb2*vec_z
-        C. append(CheckLine(self.q,loc, 1, 0, [-self.el, 0]))     
-        C. append(CheckLine(self.q,loc, 0, 1, [-self.el, 0]))     
+        C. append(CheckLine(self.q,loc, 1, 0, [-self.el, 0], -1))     
+        C. append(CheckLine(self.q,loc, 0, 1, [-self.el, 0], -1))     
         loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb2*vec_z
-        C. append(CheckLine(self.q, loc, 1, 0, [0, self.pl]))       
+        C. append(CheckLine(self.q, loc, 1, 0, [0, self.pl], 1))       
 
          # 14 - 19, P3  
         loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb3*vec_z
-        C. append(CheckLine(self.q, loc, 1, 0, [0, self.el]))     
-        C. append(CheckLine(self.q, loc, 0, 1, [0, self.el]))     
+        C. append(CheckLine(self.q, loc, 1, 0, [0, self.el], 1))     
+        C. append(CheckLine(self.q, loc, 0, 1, [0, self.el], 1))     
         loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb3*vec_z
-        C. append(CheckLine(self.q, loc, 1, 0, [-self.el, 0]))     
-        C. append(CheckLine(self.q, loc, 0, 1, [-self.el, 0]))     
+        C. append(CheckLine(self.q, loc, 1, 0, [-self.el, 0], -1))     
+        C. append(CheckLine(self.q, loc, 0, 1, [-self.el, 0], -1))     
         loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb3*vec_z
-        C. append(CheckLine(self.q, loc, 1, 0, [0, self.pl]))     
+        C. append(CheckLine(self.q, loc, 1, 0, [0, self.pl], 1))     
         
         self.col_cons = C
         self.log("Collisions Defined", 2)

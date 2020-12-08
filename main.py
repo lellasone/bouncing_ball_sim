@@ -101,12 +101,11 @@ class gui():
                 self.compute_control_forces(True) 
                 # Check Collisions or update sim
                 col = self.sys.check_collisions(self.state, self.dt)
-                if col > 0 :
+                if col >= 0 :
                     self.log("COLLISION #{}".format(col), 2)
                     s = self.sys.collision_update(state_old, col)
                 else:
                     s = self.sys.integrate(self.state,self.dt, self.forces)
-                self.log(type(s))
                 
                 #Record new states     
                 t += self.dt 
@@ -116,7 +115,10 @@ class gui():
                 self.set_state_gui(s)
                 self.log(s, 3)
             else:
-                self.state[0:4] = self.get_state_gui()
+                try:
+                    self.state[0:4] = self.get_state_gui()
+                except:
+                    self.log("invalid input, 2")
                 self.compute_control_forces(False) 
             # If we have time left in the loop, sleep till next draw needed.
             if end - time.time() -.0001 > 0:
@@ -161,11 +163,13 @@ class gui():
         delay = 1.0/60
         while(not kill_thread.is_set()):
             end = time.time() + delay
-            ball_new, plate_new =self.update_canvas(self.state)
+            ball_new, plate_new, mark_new =self.update_canvas(self.state)
             self.canvas.delete(self.ball)
             self.canvas.delete(self.plate)
+            self.canvas.delete(self.mark)
             self.ball = ball_new
             self.plate = plate_new
+            self.mark = mark_new
             # If we have time left in the loop, sleep till next draw needed.
             if end - time.time() -.0001> 0:
                 time.sleep(end - time.time())
@@ -203,8 +207,12 @@ class gui():
                                    p2[0], p2[1],
                                    p3[0], p3[1])
 
+        # Draw the marker.
+        color = 'red'
+        mark_new = self.canvas.create_line(b0[0],b0[1],b3[0],b3[1], fill = color)
+
         self.forces[0] = np.float64(self.wind.get())*self.wind_scale
-        return(ball_new, plate_new) 
+        return(ball_new, plate_new, mark_new) 
  
     def draw_canvas(self,s):
         """! Draw a given state vector on the canvas. 
@@ -237,9 +245,9 @@ class gui():
                                 width = 5)
         self.log("Boarder Drawn", 4)
         
-        ball, plate = self.update_canvas(s)  
+        ball, plate, mark = self.update_canvas(s)  
 
-        return(ball, plate) 
+        return(ball, plate, mark) 
     
     def create_gui(self):
         interface = Frame(root)
@@ -322,7 +330,7 @@ class gui():
 
         interface.grid(column = 1, row = 1)
         display.grid(column = 1, row = 0)
-        self.ball, self.plate = self.draw_canvas(self.state)
+        self.ball, self.plate, self.mark  = self.draw_canvas(self.state)
 
 
         return(root)
