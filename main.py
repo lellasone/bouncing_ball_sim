@@ -16,14 +16,16 @@ class gui():
         #self.setup_simulation()
         #self.run_simulation() 
         self.sys = System()
-        self.state = [0,200,np.pi/5,0, 0,-100,0,0]
+        self.state = [-0.1,200,np.pi/5,np.pi/20, np.pi/20,-100,-1,-1]
         self.dt = 0.01 # how long to jump each simulation time step.
 
         self.g_cw = self.sys.build_G(self.sys.build_R(-np.pi),[self.width/2,self.height,0])
+        self.wind_scale = -0.5 
         root = self.create_gui()
         stop = threading.Event()
         draw = threading.Thread(target = self.animate_canvas, args = (stop,))
         simulate = threading.Thread(target = self.simulate_system, args = (stop,))
+        self.run = False # Should the simulation continue
         
         try:
             draw.start()
@@ -38,31 +40,51 @@ class gui():
         then the real-life time.
         """
         #TODO: Document.
-        t = 0
+        t = self.dt
         traj = [self.state]
         state_old = self.state # Used in computing the impact equation
         while(not kill_thread.is_set()):
             # Used for throttling 
             end = time.time() + self.dt
             
-            t += self.dt 
-            col = self.sys.check_collisions(self.state)
+            col = self.sys.check_collisions(self.state, self.dt)
             if col > 0 :
-                self.log("COLLISION #{}".format(col), 3)
+                self.log("COLLISION #{}".format(col), 2)
                 s = self.sys.collision_update(state_old, col)
             else:
-                s = self.sys.integrate(self.state,self.dt)
-
-            if(True):
+                s = self.sys.integrate(self.state,self.dt, self.forces)
+            self.log(type(s))
+            if(self.run):
+                t += self.dt 
                 state_old = self.state
                 self.state = s
                 traj.append(s)
+                self.set_state_gui(s)
                 self.log(s, 3)
-            
+            else:
+                self.state[0:4] = self.get_state_gui() 
             # If we have time left in the loop, sleep till next draw needed.
             if end - time.time() -.0001 > 0:
-                time.sleep(end - time.time())
+                time.sleep(end - time.time())   
+    def get_state_gui(self):
+        s = [np.float64(self.s0.get()),
+             np.float64(self.s1.get()), 
+             np.float64(self.s2.get()), 
+             np.float64(self.s3.get())]
+        return(s)
 
+    def set_state_gui(self, s):
+        
+        self.s0.set(s[0])
+        self.s1.set(s[1])
+        self.s2.set(s[2])
+        self.s3.set(s[3])
+        
+    def pause(self):
+            self.run = False
+
+    def start(self):
+            self.run = True
  
     def animate_canvas(self, kill_thread):
         """! Thread for drawing the canvas based on the system state. 
@@ -84,7 +106,8 @@ class gui():
             self.plate = plate_new 
             # If we have time left in the loop, sleep till next draw needed.
             if end - time.time() -.0001> 0:
-                time.sleep(end - time.time()) 
+                time.sleep(end - time.time())
+ 
     def update_canvas(self,s):
         """! ns A tuple containing the ball and plate objects.
         """
@@ -116,6 +139,9 @@ class gui():
                                    p1[0], p1[1],
                                    p2[0], p2[1],
                                    p3[0], p3[1])
+
+        #TODO: Move this to it's own thread 
+        self.forces = [np.float64(self.wind.get())*self.wind_scale,0]
         return(ball_new, plate_new) 
  
     def draw_canvas(self,s):
@@ -159,23 +185,30 @@ class gui():
 
         # Build Interface
         buttons = Frame(interface)
-        start = Button(buttons,text="start")
-        stop = Button(buttons, text="pause")
+        start = Button(buttons,text="start",command = self.start)
+        stop = Button(buttons, text="pause", command = self.pause)
         reset = Button(buttons,text="Reset")
+        self.wind = Scale(buttons, from_=-100, to=100, orient = HORIZONTAL)
         start.grid(row = 0,column = 0,padx = 5)
         stop.grid(row = 0, column = 1, padx = 5)
         reset.grid(row = 0, column = 2, padx = 5)
+        self.wind.grid(row = 0, column = 3, padx = 5)
 
 
         state = Frame(interface)
+        
+        self.s0 = StringVar(state)
+        self.s1 = StringVar(state)
+        self.s2 = StringVar(state)
+        self.s3 = StringVar(state)
         label0 = Label(state, text = "Ball X")
         label1 = Label(state, text = "Ball Y")
         label2 = Label(state, text = "Ball Angle")
         label3 = Label(state, text = "Plate Angle")
-        s0 = Entry(state, width = 10)
-        s1 = Entry(state, width = 10)
-        s2 = Entry(state, width = 10)
-        s3 = Entry(state, width = 10)
+        s0 = Entry(state, width = 10, textvariable = self.s0)
+        s1 = Entry(state, width = 10, textvariable = self.s1)
+        s2 = Entry(state, width = 10, textvariable = self.s2)
+        s3 = Entry(state, width = 10, textvariable = self.s3)
         label0.grid(column = 0, row = 0)
         label1.grid(column = 1, row = 0)
         label2.grid(column = 2, row = 0)
@@ -184,6 +217,7 @@ class gui():
         s1.grid(column = 1, row = 1)
         s2.grid(column = 2, row = 1)
         s3.grid(column = 3, row = 1)
+        self.set_state_gui(self.state)
 
         state.pack()
         buttons.pack()

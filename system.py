@@ -7,7 +7,7 @@ class System():
     
     TODO: Add how-to-use. 
     """
-    def __init__(self):
+    def __init__(self, s = [0,0,0,0,0,0,0,0]):
         """! Sets various constants, defines variables and defines the relationships between frames in the system. 
         """
         self.VERBOSITY = 3 # Lower value to see less readouts. 
@@ -17,7 +17,7 @@ class System():
         self.t = t
         
         # Lets define the system's known constants. 
-        self.el = 400 # Length of each side of the operating frame. 
+        self.el = 100 # Length of each side of the operating frame. 
         self.ph = self.el * 0.2 # Distance from the bottom of the frame to the center of the plate. 
         self.pw = self.el * 0.1 # Width of the plate. 
         self.pl = self.el * 0.8 # Length of the plate. 
@@ -161,23 +161,23 @@ class System():
             if abs(i[lamb])> 10**-10:
                 sol = i 
         self.log(sol) 
-        return([s[0],
-                s[1],
-                s[2],
-                s[3],
-                sol[self.qd_dum_p[0]],
-                sol[self.qd_dum_p[1]],
-                sol[self.qd_dum_p[2]],
-                sol[self.qd_dum_p[3]]])
+        return([np.float64(s[0]),
+                np.float64(s[1]),
+                np.float64(s[2]),
+                np.float64(s[3]),
+                np.float64(sol[self.qd_dum_p[0]]),
+                np.float64(sol[self.qd_dum_p[1]]),
+                np.float64(sol[self.qd_dum_p[2]]),
+                np.float64(sol[self.qd_dum_p[3]])])
 
         
          
-    def check_collisions(self,s):
+    def check_collisions(self,s, dt):
         """! Check which collision conditions are met for a system state. 
         """
         
         for i, c in enumerate (self.col_cons):
-            if(c(s)):
+            if(c.check(s, dt)):
                 return(i)
         return(-1)
         
@@ -217,8 +217,8 @@ class System():
         
         # Lets define the collision conditions. The order of these within the list must
         # correspond to the ordering of the condition equations.
-        class CollisionCheckLine:
-            def __init__(self, q, s_init  transform, impact_dir, extent_dir, limits):
+        class CheckLine:
+            def __init__(self, q,  transform, impact_dir, extent_dir, limits):
                 """! Check if a point has impacted a line. 
                 This class checks for impacts between a point and a line in the
                 world. It is assumed that the line is straight and that the 
@@ -226,7 +226,6 @@ class System():
                 axis is zero when the impact takes place. 
     
                 @param q, symbolic state vector of the system. 
-                @param s_init, numeric state vector of the system at start.
                 @param transform, the transform such that the two colliding 
                                   objects share a reference frame. 
                 @param impact_dir, index of the position vector which is 
@@ -238,17 +237,24 @@ class System():
                 self.impact_dir = impact_dir
                 self.extent_dir = extent_dir
                 self.limits = limits
-                self.get_position = sym.lambdify(transform, q*)
-                self.last_position = self.get_position(s_init[0:4])
+                self.equation = transform[impact_dir] # Used to compute update 
+                self.get_position = sym.lambdify([q[0],q[1],q[2],q[3]],
+                                                 transform,
+                                                 "numpy")
+                self.first = True
 
-            def check(self, s):
-                # TODO: Document. 
-                position = self.get_position(s[0:4])
-                vel = np.dot(self.position - self.last_position,
-                             self.position - self.last_position)
-                margin = vel * 0.8 
-                print(margin)
-                hit_line = (margin > abs(position[self.impact_dir])
+            def check(self, s,dt):
+                # TODO: Documet. 
+                print(type(s[0]))
+                position = self.get_position(*list(s[0:4]))
+                if self.first:
+                    self.first = False
+                    self.last_position = position
+                    return(False)
+                vel = np.sqrt(np.dot(np.transpose(position - self.last_position),
+                             position - self.last_position))
+                margin = vel * 1.2  * dt 
+                hit_line = (margin > abs(position[self.impact_dir]))
                 loc = position[self.extent_dir]
                 within_line = self.limits[0] <= loc and loc <= self.limits[1]
                 return(hit_line and within_line) 
@@ -256,111 +262,44 @@ class System():
                  
             
         C = []
-        def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb0*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] and loc[0]<= self.el )
-        C.append(temp)
-        def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb0*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[0]) and 0 <= loc[1] and loc[1]<= self.el )
-        C.append(temp)
-        def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb0*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            self.log(loc)
-            return(self.col_margin > abs(loc[1]) and -self.el <= loc[0] and loc[0] <= 0 )
-        C.append(temp)
-        def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb0*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[0]) and -self.el <= loc[1] and loc[1]<= 0 )
-        C.append(temp)
-        def temp(s): 
-            loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb0*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            self.log(loc)
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] and loc[0]<= self.pl )
-        C.append(temp)
-        
-        def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb1*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] and loc[0]<= self.el )
-        C.append(temp)
-        def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb1*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[0]) and 0 <= loc[1] and loc[1]<= self.el )
-        C.append(temp)
-        def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb1*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and -self.el <= loc[0] and loc[0]<= 0 )
-        C.append(temp)
-        def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb1*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[0]) and -self.el <= loc[1] and loc[1]<= 0 )
-        C.append(temp)
-        def temp(s): #9 
-            loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb1*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] and loc[0]<= self.pl )
-        C.append(temp)
-        
-        def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb2*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] and loc[0]<= self.el )
-        C.append(temp)
-        def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb2*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[0]) and 0 <= loc[1] and loc[1]<= self.el )
-        C.append(temp)
-        def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb2*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and -self.el <= loc[0] and loc[0]<= 0 )
-        C.append(temp)
-        def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb2*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[0]) and -self.el <= loc[1] and loc[1]<= 0 )
-        C.append(temp)
-        def temp(s): 
-            loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb2*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] and loc[0]<= self.pl )
-        C.append(temp)
-        
-        def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb3*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] and loc[0]<= self.el )
-        C.append(temp)
-        def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb3*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[0]) and 0 <= loc[1] and loc[1]<= self.el )
-        C.append(temp)
-        def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb3*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and -self.el <= loc[0] and loc[0]<= 0 )
-        C.append(temp)
-        def temp(s): 
-            loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb3*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[0]) and -self.el <= loc[1] and loc[1]<= 0 )
-        C.append(temp)
-        def temp(s): 
-            loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb3*vec_z
-            loc = loc.subs({self.q[0]:s[0],self.q[1]:s[1],self.q[2]:s[2],self.q[3]:s[3]})
-            return(self.col_margin > abs(loc[1]) and 0 <= loc[0] and loc[0]<= self.pl )
-        C.append(temp)
+        # 0 - 4, P0 
+        loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb0*vec_z
+        C. append(CheckLine(self.q, loc, 1, 0, [0, self.el]))
+        C. append(CheckLine(self.q, loc, 0, 1, [0, self.el]))     
+        loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb0*vec_z        
+        C. append(CheckLine(self.q, loc, 1, 0, [-self.el, 0]))     
+        C. append(CheckLine(self.q, loc, 0, 1, [-self.el, 0]))     
+        loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb0*vec_z
+        C.append(CheckLine(self.q, loc, 1, 0, [0, self.pl]))     
+       
+        # 5 - 9, P1  
+        loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb1*vec_z
+        C. append(CheckLine(self.q, loc, 1, 0, [0, self.el]))     
+        C. append(CheckLine(self.q, loc, 0, 1, [0, self.el]))     
+        loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb1*vec_z
+        C. append(CheckLine(self.q,loc, 1, 0, [-self.el, 0]))     
+        C. append(CheckLine(self.q, loc, 0, 1, [-self.el, 0]))     
+        loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb1*vec_z
+        C. append(CheckLine(self.q, loc, 1, 0, [0, self.pl]))     
+         # 9 - 14, P2  
+        loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb2*vec_z
+        C. append(CheckLine(self.q,  loc, 1, 0, [0, self.el]))     
+        C. append(CheckLine(self.q, loc, 0, 1, [0, self.el]))     
+        loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb2*vec_z
+        C. append(CheckLine(self.q,loc, 1, 0, [-self.el, 0]))     
+        C. append(CheckLine(self.q,loc, 0, 1, [-self.el, 0]))     
+        loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb2*vec_z
+        C. append(CheckLine(self.q, loc, 1, 0, [0, self.pl]))       
+
+         # 14 - 19, P3  
+        loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb3*vec_z
+        C. append(CheckLine(self.q, loc, 1, 0, [0, self.el]))     
+        C. append(CheckLine(self.q, loc, 0, 1, [0, self.el]))     
+        loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb3*vec_z
+        C. append(CheckLine(self.q, loc, 1, 0, [-self.el, 0]))     
+        C. append(CheckLine(self.q, loc, 0, 1, [-self.el, 0]))     
+        loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb3*vec_z
+        C. append(CheckLine(self.q, loc, 1, 0, [0, self.pl]))     
         
         self.col_cons = C
         self.log("Collisions Defined", 2)
@@ -596,21 +535,20 @@ class System():
         H = dldqd * qd - L_mat
         return(H)
 
-    def integrate(self, s, dt ):
+    def integrate(self, s, dt , F):
         """! Integrate the state vector to get the next state vector. 
         This function impliments fourth order Runge-Kutta numerical
         integration. 
         @param s, the system state before time step.
         @param dt, how long each time step is. 
-        @param f, a function that takes a system state and returns it's 
-                  derivative. 
+        @param F, External force vector for the system 
         @returns the system state at the end of the time step
         """
         f = self.dyn
-        k1 = f(s) # Derivative at start of time step.
-        k2 = f(s + dt*k1/2) # Derivative at halfway point.
-        k3 = f(s + dt*k2/2) # Derivative at halfway point take 2.
-        k4 = f(s + dt*k3) # Derivative at the end of the step.
+        k1 = f(s, F) # Derivative at start of time step.
+        k2 = f(s + dt*k1/2, F) # Derivative at halfway point.
+        k3 = f(s + dt*k2/2, F) # Derivative at halfway point take 2.
+        k4 = f(s + dt*k3, F) # Derivative at the end of the step.
         s_final = s + dt*(k1 + 2*k2 + 2*k3 + k4)/6
         return(s_final)
 
