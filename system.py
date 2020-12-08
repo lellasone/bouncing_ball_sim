@@ -17,19 +17,18 @@ class System():
         self.t = t
         
         # Lets define the system's known constants. 
-        self.el = 100 # Length of each side of the operating frame. 
+        self.el = 1 # Length of each side of the operating frame. 
         self.ph = self.el * 0.2 # Distance from the bottom of the frame to the center of the plate. 
         self.pw = self.el * 0.1 # Width of the plate. 
         self.pl = self.el * 0.8 # Length of the plate. 
         self.bl = self.el/10 # side length of square ball. 
         
         self.G = 9.8 # Force of gravity
-        self.G = 98 # Force of gravity
         self.Mb = 1
         self.Mp = 10
        
         #TODO: Make this less add-hock.
-        self.col_margin = 0.002*self.el 
+        self.col_scale = 4 
         
         # Lets set up our state vector.
         x = sym.Function('x')(self.t)
@@ -217,6 +216,8 @@ class System():
         
         # Lets define the collision conditions. The order of these within the list must
         # correspond to the ordering of the condition equations.
+        G = self.G
+        scale = self.col_scale
         class CheckLine:
             def __init__(self, q,  transform, impact_dir, extent_dir, limits):
                 """! Check if a point has impacted a line. 
@@ -243,9 +244,8 @@ class System():
                                                  "numpy")
                 self.first = True
 
-            def check(self, s,dt):
+            def check(self, s, dt):
                 # TODO: Documet. 
-                print(type(s[0]))
                 position = self.get_position(*list(s[0:4]))
                 if self.first:
                     self.first = False
@@ -253,7 +253,9 @@ class System():
                     return(False)
                 vel = np.sqrt(np.dot(np.transpose(position - self.last_position),
                              position - self.last_position))
-                margin = vel * 1.2  * dt 
+                vel = np.linalg.norm(position-self.last_position)
+                margin = (vel+G*dt) * scale  * dt 
+                
                 hit_line = (margin > abs(position[self.impact_dir]))
                 loc = position[self.extent_dir]
                 within_line = self.limits[0] <= loc and loc <= self.limits[1]
