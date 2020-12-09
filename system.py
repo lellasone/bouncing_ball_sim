@@ -20,7 +20,7 @@ class System():
         self.el = 1 # Length of each side of the operating frame. 
         self.ph = self.el * 0.2 # Distance from the bottom of the frame to the center of the plate. 
         self.pw = self.el * 0.1 # Width of the plate. 
-        self.pl = self.el * 0.8 # Length of the plate. 
+        self.pl = self.el * 0.7 # Length of the plate. 
         self.bl = self.el/10 # side length of square ball. 
         
         self.G = 9.8 # Force of gravity
@@ -112,8 +112,7 @@ class System():
         dldqd = sym.Matrix([self.LG]).jacobian(self.qd).subs(sym_subs)
         H = self.compute_H(self.LG, self.q).subs(sym_subs)        
         
-        self.cols_equs_s = []
-        for e in self.col_cons:
+        for i, e in enumerate(self.col_cons):
              
             c = sym.Matrix([e.equation])
             print(c)
@@ -124,7 +123,6 @@ class System():
 
             # Lets build equation 2:
             eq2 = sym.Eq(sym.Matrix([0]), H.subs(sym_subs_p) - H)
-            
             e.col_update_equ = [eq1, eq2]
  
     def compute_collision(self,s,n):
@@ -151,7 +149,7 @@ class System():
                        self.qd_dum[3]:s[7]}
         eq1 = equations[0].subs(update_subs) 
         eq2 = equations[1].subs(update_subs) 
-        sols = sym.solve([eq1, eq2],self.qd_dum_p + [lamb], dict = True)
+        sols = sym.solve([eq1, eq2],self.qd_dum_p + [lamb], dict = True, quick = True)
         # Lets pick only the non-trivial solution. 
         sol = ''
         for i  in sols:
@@ -276,45 +274,20 @@ class System():
                  
             
         C = []
-        # 0 - 4, P0 
-        loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb0*vec_z
-        C. append(CheckLine(self.q, loc, 1, 0, [0, self.el], 1))
-        C. append(CheckLine(self.q, loc, 0, 1, [0, self.el], 1))     
-        loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb0*vec_z        
-        C. append(CheckLine(self.q, loc, 1, 0, [-self.el, 0], -1))     
-        C. append(CheckLine(self.q, loc, 0, 1, [-self.el, 0], -1))     
-        loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb0*vec_z
-        C.append(CheckLine(self.q, loc, 1, 0, [0, self.pl], 1))     
-       
-        # 5 - 9, P1  
-        loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb1*vec_z
-        C. append(CheckLine(self.q, loc, 1, 0, [0, self.el], 1))     
-        C. append(CheckLine(self.q, loc, 0, 1, [0, self.el], 1))     
-        loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb1*vec_z
-        C. append(CheckLine(self.q,loc, 1, 0, [-self.el, 0], -1))     
-        C. append(CheckLine(self.q, loc, 0, 1, [-self.el, 0], -1))     
-        loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb1*vec_z
-        C. append(CheckLine(self.q, loc, 1, 0, [0, self.pl], 1))     
-         # 9 - 14, P2  
-        loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb2*vec_z
-        C. append(CheckLine(self.q,  loc, 1, 0, [0, self.el], 1))     
-        C. append(CheckLine(self.q, loc, 0, 1, [0, self.el], 1))     
-        loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb2*vec_z
-        C. append(CheckLine(self.q,loc, 1, 0, [-self.el, 0], -1))     
-        C. append(CheckLine(self.q,loc, 0, 1, [-self.el, 0], -1))     
-        loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb2*vec_z
-        C. append(CheckLine(self.q, loc, 1, 0, [0, self.pl], 1))       
+        for g in [self.g_bb0, self.g_bb1, self.g_bb2, self.g_bb3]:
+            loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*g*vec_z
+            C. append(CheckLine(self.q, loc, 1, 0, [0, self.el], 1))
+            C. append(CheckLine(self.q, loc, 0, 1, [0, self.el], 1))     
+            loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*g*vec_z        
+            C. append(CheckLine(self.q, loc, 1, 0, [-self.el, 0], -1))     
+            C. append(CheckLine(self.q, loc, 0, 1, [-self.el, 0], -1))     
+            loc = self.invert_G(self.g_wp*self.g_pp0)*self.g_wb*g*vec_z
+            C.append(CheckLine(self.q, loc, 1, 0, [0, self.pl], -1))     
+            C.append(CheckLine(self.q, loc, 0, 1, [0, self.pw], -1))      
+            loc = self.invert_G(self.g_wp*self.g_pp2)*self.g_wb*g*vec_z
+            C. append(CheckLine(self.q, loc, 1, 0, [-self.pl, 0], 1))     
+            C. append(CheckLine(self.q, loc, 0, 1, [-self.pw, 0], 1))     
 
-         # 14 - 19, P3  
-        loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*self.g_bb3*vec_z
-        C. append(CheckLine(self.q, loc, 1, 0, [0, self.el], 1))     
-        C. append(CheckLine(self.q, loc, 0, 1, [0, self.el], 1))     
-        loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*self.g_bb3*vec_z
-        C. append(CheckLine(self.q, loc, 1, 0, [-self.el, 0], -1))     
-        C. append(CheckLine(self.q, loc, 0, 1, [-self.el, 0], -1))     
-        loc = self.invert_G(self.g_wp*self.g_pp1)*self.g_wb*self.g_bb3*vec_z
-        C. append(CheckLine(self.q, loc, 1, 0, [0, self.pl], 1))     
-        
         self.col_cons = C
         self.log("Collisions Defined", 2)
     
@@ -334,11 +307,11 @@ class System():
         self.g_bb1 = self.build_G(self.build_R(0),[-self.bl/2, self.bl/2, 0])
         self.g_bb2 = self.build_G(self.build_R(0),[self.bl/2, self.bl/2, 0])
         self.g_bb3 = self.build_G(self.build_R(0),[self.bl/2, -self.bl/2, 0])
-        self.g_we = self.build_G(self.build_R(0),    [0,self.el/2, 0]) #Define the edges.
-        self.g_ee0 = self.build_G(self.build_R(0),  [-self.el/2, -self.el/2, 0])
-        self.g_ee1 = self.build_G(self.build_R(0),  [self.el/2, -self.el/2, 0])
-        self.g_ee2 = self.build_G(self.build_R(0),  [self.el/2, self.el/2, 0])
-        self.g_ee3 = self.build_G(self.build_R(0),  [-self.el/2, self.el/2 ,0])
+        self.g_we = self.build_G(self.build_R(0), [0,self.el/2, 0]) #Define the edges.
+        self.g_ee0 = self.build_G(self.build_R(0),[-self.el/2, -self.el/2, 0])
+        self.g_ee1 = self.build_G(self.build_R(0),[self.el/2, -self.el/2, 0])
+        self.g_ee2 = self.build_G(self.build_R(0),[self.el/2, self.el/2, 0])
+        self.g_ee3 = self.build_G(self.build_R(0),[-self.el/2, self.el/2 ,0])
                
         # Now a few extras for convenience. 
 

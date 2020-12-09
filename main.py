@@ -21,6 +21,7 @@ class gui():
         self.width = self.sys.el*(1 + boarder) # width of canvas. 
         self.height = self.sys.el*(1 + boarder) # height of canvas. 
         self.initial_state =   [-0.1,self.height/2,np.pi/5,np.pi/20, .25,0,-1,-1]
+        self.initial_state =   [-0.1,self.height*0.8,-np.pi/4,np.pi, 0,0,0,0]
         self.state = self.initial_state
         self.dt = 0.005 # how long to jump each simulation time step.
 
@@ -38,7 +39,7 @@ class gui():
         self.outer.output_limits = (-np.pi/8, np.pi/8)
         self.wind_scale = -0.1
         self.plate_goal = 0
-        self.control_defaults = [1500, 100, -.1, -.05]
+        self.control_defaults = [1500, 100, -.4, -.04]
 
 
         root = self.create_gui()
@@ -57,7 +58,7 @@ class gui():
 
     def compute_control_forces(self, running):
         
-        if running:  
+        if running and self.control_enable.get() == 1:  
             # Handle outer loop
             self.auto_mode = True
             try:
@@ -66,9 +67,7 @@ class gui():
             except:
                 self.log("Invalid Input",2)
             self.sample_time = self.dt
-            self.plate_goal = self.outer(self.state[0])
-            print(self.plate_goal)
-            print(self.state)
+            self.plate_goal = self.outer(self.state[4])
           
 
               # Handle inner loop 
