@@ -1,3 +1,16 @@
+"""! This file contains code for simulating and displaying the system.
+
+The gui class is responsible for drawing the GUI and running the simulation
+process. It contains all of the code for numerical integration, calculating 
+the external forces, and setting/resetting the system state.
+
+Threads:
+    simulate_system - Runs the numerical simulation, the collison processing,
+                      and the controller. Typically around 200hz.
+    animate_canvas  - Draws the system state on the canvas. 60hz
+    Tkinter Threads  - Run the tkinter GUI, best not to mess with them...
+
+"""
 from system import System
 from tkinter import *
 import sympy as sym
@@ -9,8 +22,7 @@ root = Tk()
 
 class gui():
 
-    def __init__(self):
-        
+    def __init__(self):        
         self.sys = System()
         self.VERBOSITY = 2
 
@@ -20,11 +32,10 @@ class gui():
                        # canvas dimensions
         self.width = self.sys.el*(1 + boarder) # width of canvas. 
         self.height = self.sys.el*(1 + boarder) # height of canvas. 
-        self.initial_state =   [-0.1,self.height/2,np.pi/5,np.pi/20, .25,0,-1,-1]
-        self.initial_state =   [-0.1,self.height*0.8,-np.pi/4,np.pi, 0,0,0,0]
+        self.initial_state = [-0.1,self.height*0.8,-np.pi/4,np.pi, 0,0,0,0]
         self.state = self.initial_state
-        self.dt = 0.005 # how long to jump each simulation time step.
-
+        self.dt = 0.005 # how long to jump the simulation each time step.
+        # Transform to move from simulation coordinates to gui coordinates.
         self.g_cw = self.sys.build_G(self.sys.build_R(-np.pi),
                                     [self.width/2,
                                     self.height - self.height*boarder*0.5,
@@ -41,7 +52,7 @@ class gui():
         self.wind_scale = -0.1
         self.plate_goal = 0
         self.velocity_goal = 0
-        self.control_defaults = [1500, 100, -.3, -.04, 0.5]
+        self.control_defaults = [1500, 120, -.25, -.04, 0.5]
 
 
         root = self.create_gui()
@@ -49,8 +60,7 @@ class gui():
         draw = threading.Thread(target = self.animate_canvas, args = (stop,))
         simulate = threading.Thread(target = self.simulate_system, args = (stop,))
         self.run = False # Should the simulation continue
-
-        
+ 
         try:
             draw.start()
             simulate.start()
@@ -59,11 +69,18 @@ class gui():
             stop.set()  
 
     def compute_control_forces(self, running):
-        
+        """! Compute the wind and control forces. 
+        When the controllers are enabled and the system is running the 
+        controllers are updated each timestep in order from outermost to 
+        innermost. When those conditions are not met the controllers are 
+        paused.
+
+        @param running, Set to True if the simulation is running. 
+        """ 
         if running and self.control_enable.get() == 1: 
             
-            print("velocity goal: {}".format(self.velocity_goal))
-            print(self.plate_goal) 
+            self.log(("velocity goal: {}".format(self.velocity_goal)), 4)
+            
             # Handle velocity loop
             self.auto_mode = True
             try:
@@ -102,20 +119,25 @@ class gui():
             self.auto_mode = False  
 
     def simulate_system(self, kill_thread):
-        """ 
-        #TODO: add docstring. 
+        """! The main simulation function/thread.  
+        This function executes the numerical simulation of the system. When the
+        system is not paused the next state will be computed by numerically 
+        integrating the current system state or by computing a collision update
+        if appropriate.
+        
+        If the system is paused the system state will be set to the GUI values.
+        The state derivatives will not be altered. 
+
         This function will throttle if the simulation time begins to run faster
         then the real-life time.
         """
-        #TODO: Document.
         t = self.dt
-        traj = [self.state]
+        traj = [self.state] # Trajectory of the system, could saved and graphed
         state_old = self.state # Used in computing the impact equation
         while(not kill_thread.is_set()):
             # Used for throttling 
             end = time.time() + self.dt
-            
-           
+               
             if(self.run):
                 self.compute_control_forces(True) 
                 # Check Collisions or update sim
@@ -145,6 +167,10 @@ class gui():
 
 
     def get_state_gui(self):
+        """! Return the values of the GUI state entrys
+        @returns an array corresponding to the system state entered/displayed
+                 in the GUI.
+        """
         s = [np.float64(self.s0.get()),
              np.float64(self.s1.get()), 
              np.float64(self.s2.get()), 
@@ -152,19 +178,27 @@ class gui():
         return(s)
 
     def set_state_gui(self, s):
-        
+        """ Set the state entrys on the GUI
+        @param s, new state vector to push to the display.
+        """ 
         self.s0.set(s[0])
         self.s1.set(s[1])
         self.s2.set(s[2])
         self.s3.set(s[3])
         
     def pause(self):
+        """! Pause the simulation
+        """
             self.run = False
 
     def start(self):
+        """! Unpause the simulation.
+        """
             self.run = True
     
     def reset(self):
+        """! Set the system state to it's default.
+        """
             self.state = self.initial_state
             self.set_state_gui(self.state)
             self.run = False
@@ -193,8 +227,10 @@ class gui():
             if end - time.time() -.0001> 0:
                 time.sleep(end - time.time())
  
-    def update_canvas(self,s):
-        """! ns A tuple containing the ball and plate objects.
+    def update_canvas(self, s):
+        """! Create new marker, ball, and plate objects for the new state.
+        @param s, the new system state for which to create objects. 
+        @returns the ball, plate, and marker objects.
         """
         scale = self.scale # Honestly this is just so the text fits
 
@@ -233,13 +269,17 @@ class gui():
         self.forces[0] = np.float64(self.wind.get())*self.wind_scale
         return(ball_new, plate_new, mark_new) 
  
-    def draw_canvas(self,s):
-        """! Draw a given state vector on the canvas. 
+    def draw_canvas(self, s):
+        """! This creates a new canvas for the display. 
+        This function should be called once at program start to create the
+        canvas. Thereafter use update_canvas should be used instead since it 
+        will be much faster. 
+          
         Pre-condition: Tkinter interface must be set up. 
                        self.sys must be defined. 
 
         @param s initial system state vector to display.
-        @returns A tuple containing the ball and plate objects.
+        @returns A tuple containing the ball, marker, and plate objects.
         """
         # Remove old canvas.
         self.canvas.delete("all") 
@@ -269,6 +309,10 @@ class gui():
         return(ball, plate, mark) 
     
     def create_gui(self):
+        """! Creates the GUI objects and assemble them. 
+        This is the obligatory Tkinter blob-function. It sets up all of the 
+        Tkinter widgets and their backing variables.
+        """
         interface = Frame(root)
         display = Frame(root)
 
@@ -361,8 +405,11 @@ class gui():
 
     def log(self, msg, priority = 3):
         """! Verbosity aware way to print messages to the terminal. 
+        Messages that are produced each simulation cycle should be rated 3 or 
+        above.
         @param msg, the string to be printed. 
-        @param priority, how important the message is. Recommended scale is from 0 to 3.
+        @param priority, how important the message is. Recommended scale is 
+                         ifrom 0 to 3.
         """
         if(self.VERBOSITY >= priority):
             print(msg)

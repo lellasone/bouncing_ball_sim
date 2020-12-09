@@ -72,7 +72,7 @@ class System():
         # Constrained eueler legrange equation.
         EL = sym.Eq(self.compute_EL(self.LG).T, self.F) 
         
-        print("Computing Solutions")
+        log("Computing Solutions", 0)
         self.sols = self.solve_EL(EL)
         self.log("Accelerations")
         self.log(self.sols[0][self.qdd[0]])
@@ -80,7 +80,8 @@ class System():
         self.log(self.sols[0][self.qdd[2]])
         self.log(self.sols[0][self.qdd[3]])
         self.qddl = self.lambdify_EL(self.sols[0])
-        print("Solutions Computed")
+        log("Solutions Computed",0)
+
 
     def define_collision_updates(self):
         """! 
@@ -124,7 +125,7 @@ class System():
         for i, e in enumerate(self.col_cons):
              
             c = sym.Matrix([e.equation])
-            print(c)
+            log(c)
             dphidq = c.jacobian(q).subs(sym_subs)
             
             # Lets build equation 1:
