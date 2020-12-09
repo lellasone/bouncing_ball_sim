@@ -15,7 +15,7 @@ class gui():
         self.VERBOSITY = 2
 
         # Set the visual paramiters.  
-        self.scale = 500 # scaling factor between simulated system and pixels
+        self.scale = 600 # scaling factor between simulated system and pixels
         boarder = 0.05 # Width of the canvas edge border as a portion of the 
                        # canvas dimensions
         self.width = self.sys.el*(1 + boarder) # width of canvas. 
@@ -36,10 +36,12 @@ class gui():
         self.control_enable = IntVar() 
         self.inner = PID(0, 0, 0, 0) # These are not safe defaults, change
         self.outer = PID(0, 0, 0, 0) # during system bringup.  
+        self.outer2 = PID(0, 0, 0, 0) # during system bringup.  
         self.outer.output_limits = (-np.pi/8, np.pi/8)
         self.wind_scale = -0.1
         self.plate_goal = 0
-        self.control_defaults = [1500, 100, -.4, -.04]
+        self.velocity_goal = 0
+        self.control_defaults = [1500, 100, -.3, -.04, 0.5]
 
 
         root = self.create_gui()
@@ -58,9 +60,24 @@ class gui():
 
     def compute_control_forces(self, running):
         
-        if running and self.control_enable.get() == 1:  
-            # Handle outer loop
+        if running and self.control_enable.get() == 1: 
+            
+            print("velocity goal: {}".format(self.velocity_goal))
+            print(self.plate_goal) 
+            # Handle velocity loop
             self.auto_mode = True
+            try:
+                self.outer2.Kp = self.Kp_o2.get() 
+            except:
+                self.log("Invalid Input",2)
+            self.sample_time = self.dt
+            self.velocity_goal = self.outer2(self.state[0])
+          
+
+
+            # Handle velocity loop
+            self.auto_mode = True
+            self.outer.setpoint = self.velocity_goal
             try:
                 self.outer.Kp = self.Kp_o.get() 
                 self.outer.Ki = self.Ki_o.get()
@@ -298,10 +315,12 @@ class gui():
         self.Kd_i = DoubleVar(control, value = self.control_defaults[1])
         self.Kp_o = DoubleVar(control, value = self.control_defaults[2])
         self.Ki_o = DoubleVar(control, value = self.control_defaults[3])
-        label_kpi = Label(control, text = "KP - Inner Loop")
-        label_kdi = Label(control, text = "KD - Inner Loop")
-        label_kpo = Label(control, text = "KP - Outer Loop")
-        label_kio = Label(control, text = "Ki - Outer Loop")
+        self.Kp_o2 = DoubleVar(control, value = self.control_defaults[4])
+        label_kpi = Label(control, text = "KP - Plate Loop")
+        label_kdi = Label(control, text = "KD - Plate Loop")
+        label_kpo = Label(control, text = "KP - Vx Loop")
+        label_kio = Label(control, text = "Ki - Vx Loop")
+        label_kpo2 = Label(control, text = "Kp - X Loop")
         enable = Checkbutton(control, 
                              text = "Enable", 
                              variable = self.control_enable) 
@@ -309,15 +328,18 @@ class gui():
         kdi = Entry(control, width = 15, textvariable = self.Kd_i)
         kpo = Entry(control, width = 15, textvariable = self.Kp_o)
         kio = Entry(control, width = 15, textvariable = self.Ki_o)
+        kpo2 = Entry(control, width = 15, textvariable = self.Kp_o2)
         label_kpi.grid(column = 1, row = 0) 
         label_kdi.grid(column = 2, row = 0) 
         label_kpo.grid(column = 3, row = 0) 
         label_kio.grid(column = 4, row = 0) 
+        label_kpo2.grid(column = 5, row = 0) 
         enable.grid(column = 0, row = 1, rowspan = 2)
         kpi.grid(column = 1, row = 1) 
         kdi.grid(column = 2, row = 1) 
         kpo.grid(column = 3, row = 1) 
         kio.grid(column = 4, row = 1) 
+        kpo2.grid(column = 5, row = 1) 
         
         state.pack()
         control.pack() 
