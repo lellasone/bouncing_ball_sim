@@ -316,11 +316,11 @@ class gui():
         self.Kp_o = DoubleVar(control, value = self.control_defaults[2])
         self.Ki_o = DoubleVar(control, value = self.control_defaults[3])
         self.Kp_o2 = DoubleVar(control, value = self.control_defaults[4])
-        label_kpi = Label(control, text = "KP - Plate Loop")
-        label_kdi = Label(control, text = "KD - Plate Loop")
-        label_kpo = Label(control, text = "KP - Vx Loop")
-        label_kio = Label(control, text = "Ki - Vx Loop")
-        label_kpo2 = Label(control, text = "Kp - X Loop")
+        label_kpi = Label(control, text = "KP - Plate")
+        label_kdi = Label(control, text = "KD - Plate")
+        label_kpo = Label(control, text = "KP - Velocity")
+        label_kio = Label(control, text = "Ki - Velocity")
+        label_kpo2 = Label(control, text = "Kp - Position")
         enable = Checkbutton(control, 
                              text = "Enable", 
                              variable = self.control_enable) 
