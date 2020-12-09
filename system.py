@@ -1,3 +1,13 @@
+"""! This file contains most of the math used for the simulation.
+
+The System class contains all of the symbolic math required to define the 
+system and compute state derivatives for a particular state. However, it does
+not have any provisions for integration/simulation and will thus need to be 
+paired with external code for simulating and visualizing the system.
+
+No state information is stored in the System class so it can be re-used for new
+simulations without issue.  
+"""
 import sympy as sym
 import numpy as np
 from sympy import cos, sin, tan, S
@@ -18,7 +28,7 @@ class System():
         
         # Lets define the system's known constants. 
         self.el = 1 # Length of each side of the operating frame. 
-        self.ph = self.el * 0.2 # Distance from the bottom of the frame to the center of the plate. 
+        self.ph = self.el * 0.2 # Height of plate center/pivot. 
         self.pw = self.el * 0.1 # Width of the plate. 
         self.pl = self.el * 0.7 # Length of the plate. 
         self.bl = self.el/10 # side length of square ball. 
@@ -43,7 +53,6 @@ class System():
         # Lets define some relationships between frames. 
         self.define_transforms()
         
-
         
         ### SET UP THE SYSTEM OF EQUATIONS ###
         # Build our legrangian
@@ -129,6 +138,9 @@ class System():
         """! Compute the collision update for a particular collision.
         This function is meant to be called during the simulation process in 
         responce to a valid check_collisions result.
+        
+        This function typically takes about a second to execute.
+
         @param s, the system state vector on which to perform the calculation. 
                   This will generally be one 'step' before the collision was
                   detected. It cannot be the same state vector that triggered
@@ -168,7 +180,10 @@ class System():
         
          
     def check_collisions(self,s, dt):
-        """! Check which collision conditions are met for a system state. 
+        """! Check which collision conditions are met for a system state.
+        @param s, the current system state. 
+        @param dt, the current system timestep.
+        @returns -1 if no collision, otherwise index of collision 
         """
         
         for i, c in enumerate (self.col_cons):
@@ -178,10 +193,15 @@ class System():
         
     def define_collisions(self):
         """! Define an array for all the system's collision conditions. 
+        This function is responsible for building the CheckLine objects that
+        actually define the collisions. This is what you want to edit to
+        modify collision conditions, or to create new collision conditions.
+        This function generates the self.cols_con variable.
         """
         self.log("defining collisions", 2)
         vec_z = sym.Matrix([0,0,0,1])
-        
+       
+        # Lets snag some class variables for building CheckLine 
         G = self.G
         scale = self.col_scale
         pw = self.pw
@@ -231,11 +251,18 @@ class System():
                 self.get_position = sym.lambdify([q[0],q[1],q[2],q[3]],
                                                  transform,
                                                  "numpy")
-                self.first = True
+                self.first = True # Absolute collisions don't work on first go.
                 
 
             def check(self, s, dt, i):
                 """ This function checks if a collision has occured. 
+                Collisions can either be handled a point passing by a line, or 
+                as a point passing within a certain variable margin of a line
+                depending how directional_margin was set. 
+            
+                The former is more reliable at speed, the latter works with 
+                non-square shapes.
+                
                 @param s, the current system state vecotor. 
                 @param dt, the current timestep size. 
                 @param i, the collision index (this is a way of passing in
@@ -269,24 +296,22 @@ class System():
 
                 loc = position[self.extent_dir]
                 within_line = self.limits[0] <= loc and loc <= self.limits[1]
-                return(hit_line and within_line) 
-                
-                 
+                return(hit_line and within_line)  
             
         C = []
         for g in [self.g_bb0, self.g_bb1, self.g_bb2, self.g_bb3]:
             loc = self.invert_G(self.g_we*self.g_ee0)*self.g_wb*g*vec_z
-            C. append(CheckLine(self.q, loc, 1, 0, [0, self.el], 1))
-            C. append(CheckLine(self.q, loc, 0, 1, [0, self.el], 1))     
+            C.append(CheckLine(self.q, loc, 1, 0, [0, self.el], 1))
+            C.append(CheckLine(self.q, loc, 0, 1, [0, self.el], 1))     
             loc = self.invert_G(self.g_we*self.g_ee2)*self.g_wb*g*vec_z        
-            C. append(CheckLine(self.q, loc, 1, 0, [-self.el, 0], -1))     
-            C. append(CheckLine(self.q, loc, 0, 1, [-self.el, 0], -1))     
+            C.append(CheckLine(self.q, loc, 1, 0, [-self.el, 0], -1))     
+            C.append(CheckLine(self.q, loc, 0, 1, [-self.el, 0], -1))     
             loc = self.invert_G(self.g_wp*self.g_pp0)*self.g_wb*g*vec_z
             C.append(CheckLine(self.q, loc, 1, 0, [0, self.pl], -1))     
             C.append(CheckLine(self.q, loc, 0, 1, [0, self.pw], -1))      
             loc = self.invert_G(self.g_wp*self.g_pp2)*self.g_wb*g*vec_z
-            C. append(CheckLine(self.q, loc, 1, 0, [-self.pl, 0], 1))     
-            C. append(CheckLine(self.q, loc, 0, 1, [-self.pw, 0], 1))     
+            C.append(CheckLine(self.q, loc, 1, 0, [-self.pl, 0], 1))     
+            C.append(CheckLine(self.q, loc, 0, 1, [-self.pw, 0], 1))     
 
         self.col_cons = C
         self.log("Collisions Defined", 2)
@@ -297,39 +322,40 @@ class System():
         """
         q = self.q
         # Lets define the core relationships between frames. 
-        self.g_wp = self.build_G(self.build_R(q[3]),[0, self.ph, 0]) # Define the plate. 
+        self.g_wp = self.build_G(self.build_R(q[3]),[0, self.ph, 0]) # Plate. 
         self.g_pp0 = self.build_G(self.build_R(0),[-self.pl/2, -self.pw/2, 0])
         self.g_pp1 = self.build_G(self.build_R(0),[-self.pl/2, self.pw/2, 0])
         self.g_pp2 = self.build_G(self.build_R(0),[self.pl/2, self.pw/2, 0])
         self.g_pp3 = self.build_G(self.build_R(0),[self.pl/2, -self.pw/2, 0])
-        self.g_wb = self.build_G(self.build_R(q[2]),[q[0],q[1],0]) # Define the ball. 
+        self.g_wb = self.build_G(self.build_R(q[2]),[q[0],q[1],0]) # Ball. 
         self.g_bb0 = self.build_G(self.build_R(0),[-self.bl/2, -self.bl/2, 0])
         self.g_bb1 = self.build_G(self.build_R(0),[-self.bl/2, self.bl/2, 0])
         self.g_bb2 = self.build_G(self.build_R(0),[self.bl/2, self.bl/2, 0])
         self.g_bb3 = self.build_G(self.build_R(0),[self.bl/2, -self.bl/2, 0])
-        self.g_we = self.build_G(self.build_R(0), [0,self.el/2, 0]) #Define the edges.
+        self.g_we = self.build_G(self.build_R(0), [0,self.el/2, 0]) # Edges.
         self.g_ee0 = self.build_G(self.build_R(0),[-self.el/2, -self.el/2, 0])
         self.g_ee1 = self.build_G(self.build_R(0),[self.el/2, -self.el/2, 0])
         self.g_ee2 = self.build_G(self.build_R(0),[self.el/2, self.el/2, 0])
         self.g_ee3 = self.build_G(self.build_R(0),[-self.el/2, self.el/2 ,0])
                
-        # Now a few extras for convenience. 
 
     def lambdify_EL(self, sols):
-        """! Take known solutions to the EL equations and produce lambdified functions from then. 
-        @param sols, A dictionary relating the second derivatives of the state vector with functions 
-               of the state vector and it's derivative. 
+        """! Take solutions to the EL equations and lambdify them 
+        @param sols, A dictionary relating the second derivatives of the state 
+                     vector with functions of the state vector and it's derivative. 
         @returns the second derivative of the state vector as lambidified functions. 
-        STATUS: COMPLETE, UNTESTED.
         """
+        # For brevity 
         q = self.q
         qd = self.qd
         qdd = self.qdd
         t = self.t
-        
+       
+        # Define Arguments 
         F = [self.F[0], self.F[3]]
         q_e = [q[0], q[1], q[2], q[3], qd[0], qd[1], qd[2], qd[3]]
-        
+       
+        # Lambdify! 
         x_dd = sym.lambdify([t] + q_e + F, sols[qdd[0]], "numpy")
         
         y_dd = sym.lambdify([t] + q_e + F, sols[qdd[1]], "numpy")
@@ -342,14 +368,12 @@ class System():
 
         
     def solve_EL(self,EL):
-        """! Symbolically solve the Euler Legrange Equations. 
-        
+        """! Symbolically solve the Euler Legrange Equations.     
         """
         sols = sym.solve([EL],*self.qdd, dict = True)
         return (sols)
     
 
-    # Lets make a bunch of convenience functions. 
     def build_R(self, theta):
         """! Build a 2 dimensional rotation matrix given an angle theta. 
         """
@@ -379,8 +403,9 @@ class System():
     
     def invert_G(self, g):
         """! Compute the inverse of a 3 dimensional transformation. 
-        This computes the inverse of a transformation between frames. Note that this is equivlient to a
-        matrix inversion operation but perhaps a bit less expensive to run. 
+        This computes the inverse of a transformation between frames. Note that 
+        this is equivlient to a matrix inversion operation but perhaps a bit 
+        less expensive to run. 
         @param g the transform to invert. 
         @returns a 4x4 matrix containing the inverse to g
         """
@@ -391,9 +416,11 @@ class System():
     
     def unhat_3(self,V, check = True):
         """ Undo the hat operation. 
-        This function performs checks that will fail for insufficiently simplified inputs. For example the
-        case of a diagonal element which is equivilent to zero but not actually zero as passed in. If this
-        becomes an issue symplify the input before calling this function or dissable the checks. 
+        This function performs checks that will fail for insufficiently 
+        simplified inputs. For example the case of a diagonal element which is 
+        equivilent to zero but not actually zero as passed in. If this becomes 
+        an issue symplify the input before calling this function or dissable 
+        the checks. 
         @param V a 3x3 matrix in the hatted format. 
         @param check if true assers will be called to confirm V is in hat(w) format. 
         @returns a 1x3 vector that could be used to build V through hatting.
@@ -408,8 +435,9 @@ class System():
         return(sym.Matrix([-V[1,2],V[0,2],V[1,0]]))
         
     def unhat_6(self,V):
-        """ Perform the "unhat" operation for a 4x4 matrix resulting from hatting a 1x6 vector. 
-        This is used in manipulating the V^b term's in the kinetic energy equation. 
+        """ "unhat" a 4x4 matrix resulting from hatting a 1x6 vector. 
+        This is used in manipulating the V^b term's in the kinetic energy 
+        equation. 
         @param a vector in the follwing form:
                             [omega(hat) v]
                             [0          0]
@@ -422,7 +450,7 @@ class System():
                                                   
 
     def pad(self, vec):
-        """! Adds the extra 1 at the end of a vector. Only works for vectors 3 long because this is a HW assignment. 
+        """! Adds the extra 1 at the end of a 1x3 vector.
         """
         return(vec.row_insert(3, sym.Matrix([1])))
     
@@ -442,11 +470,10 @@ class System():
 
     
     def dyn(self, s, F = [0,0]):
-        """! Computes time derivative of the extended state vector for the system.
+        """! Computes time derivative of the extended state vector.
         @param s the vector [states, state derivatives]
         @param F force vector for the system state [ball x force, plate toruqe]
         @returns s the vector [state derivatives, state second derivatives]
-        STATUS: COMPLETED, UNTESTED.
         """
         s_new = np.array([s[4],
                          s[5],
@@ -457,6 +484,7 @@ class System():
                          self.qddl[2](0, *s,*F),
                          self.qddl[3](0, *s,*F)])
         return(s_new)
+
     def collision_update(self, s, n):
         """! The dyn equivilent for collisions. 
         Currently this just wraps the compute_collision function. 
@@ -473,9 +501,11 @@ class System():
         @returns The Legrangian for the system.
         """
         self.log("defining the Legrangian")
-        
+       
+        # Second moments for constant density rectangles 
         jb = self.Mb * (self.bl**2 + self.bl**2) /12
         jp = self.Mp * (self.pl**2 + self.pw**2) /12
+        
         # Define the inertia tensors. 
         Ib = sym.Matrix([[self.Mb, 0, 0, 0, 0, 0],
                         [0, self.Mb, 0, 0, 0, 0],
@@ -498,7 +528,7 @@ class System():
         KE_b = 1/2 * Vb_b.T*Ib*Vb_b
         KE = KE_b + KE_p
 
-        # Defien the potential energies. 
+        # Define the potential energies. 
         vec_zero = sym.Matrix([0,0,0,1])
         V = (self.g_wb*vec_zero)[1]*self.Mb*self.G
         self.log("Legrangian Defined")
@@ -511,7 +541,6 @@ class System():
         @param: q the system's state variables.
         @returns: the EL equation.
         """
-        import sympy #At this point I make no appologies. 
          
         qd = q.diff(self.t)
         
@@ -541,8 +570,13 @@ class System():
 
     def log(self, msg, priority = 3):
         """! Verbosity aware way to print messages to the terminal. 
+        Use this instead of print. Messages that are sent each timestep should
+        have large priortiy values (low priority) and mesages that are set 
+        infrequently or are important should have smaller priority values.
+
         @param msg, the string to be printed. 
-        @param priority, how important the message is. Recommended scale is from 0 to 3.
+        @param priority, how important the message is. 
+                         Recommended scale is from 0 to 3.
         """
         if(self.VERBOSITY >= priority):
             print(msg)
