@@ -189,19 +189,19 @@ class gui():
     def pause(self):
         """! Pause the simulation
         """
-            self.run = False
+        self.run = False
 
     def start(self):
         """! Unpause the simulation.
         """
-            self.run = True
+        self.run = True
     
     def reset(self):
         """! Set the system state to it's default.
         """
-            self.state = self.initial_state
-            self.set_state_gui(self.state)
-            self.run = False
+        self.state = self.initial_state
+        self.set_state_gui(self.state)
+        self.run = False
  
     def animate_canvas(self, kill_thread):
         """! Thread for drawing the canvas based on the system state. 
