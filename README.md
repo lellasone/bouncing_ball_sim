@@ -59,7 +59,7 @@ The system's transforms and frames are defined as shown below.
 ### Controller
 The program uses a 3 tier cascade controller as shown below to stabalize the 
 ball's bouncing 
-in the center of the plate. The inner most controller apply's a torque to set
+in the center of the plate. The inner most controller applies a torque to set
 the plate's angle, the middle tier changes the plate's target angle to set the
 ball's horizontal velocity, and the outermost controller changes the horizontal
 velocity setpoint to move the ball to the plate's center. This architecture was
