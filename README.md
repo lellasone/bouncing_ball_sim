@@ -5,7 +5,7 @@ ball bouncing on a tilting platform in 2D using legrangian mechanics.
 The system will run in near-realtime on most computers, although the collisions
 may take several seconds to execute.
 
-A vide of the system running can be found at: https://youtu.be/52hMzjg92e0
+A video of the system running can be found at: https://youtu.be/3ByWvNWflTY
 
 ![Picture of GUI](default_start.png)
 
