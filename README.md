@@ -64,5 +64,5 @@ the plate's angle, the middle tier changes the plate's target angle to set the
 ball's horizontal velocity, and the outermost controller changes the horizontal
 velocity setpoint to move the ball to the plate's center. This architecture was
 chosen because it is easy to tune.
-![Diagram of control system](cascade_extra.jpg)
+![Diagram of control system](cascade_extra.JPG)
 
