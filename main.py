@@ -84,7 +84,7 @@ class gui():
             # Handle velocity loop
             self.auto_mode = True
             try:
-                self.outer2.Kp = self.Kp_o2.get() 
+                self.outer2.Kp = float(self.Kp_o2.get()) 
             except:
                 self.log("Invalid Input",2)
             self.sample_time = self.dt
@@ -96,8 +96,8 @@ class gui():
             self.auto_mode = True
             self.outer.setpoint = self.velocity_goal
             try:
-                self.outer.Kp = self.Kp_o.get() 
-                self.outer.Ki = self.Ki_o.get()
+                self.outer.Kp = float(self.Kp_o.get())
+                self.outer.Ki = float(self.Ki_o.get())
             except:
                 self.log("Invalid Input",2)
             self.sample_time = self.dt
@@ -108,8 +108,8 @@ class gui():
             self.auto_mode = True
             self.inner.setpoint = self.plate_goal
             try:
-                self.inner.Kp = self.Kp_i.get() 
-                self.inner.Kd = self.Kd_i.get()
+                self.inner.Kp = float(self.Kp_i.get() )
+                self.inner.Kd = float(self.Kd_i.get())
             except:
                 self.log("Invalid Input",2)           
             self.sample_time = self.dt
@@ -355,11 +355,11 @@ class gui():
 
         # Build Controller Interface
         control = Frame(interface)
-        self.Kp_i = DoubleVar(control, value = self.control_defaults[0])
-        self.Kd_i = DoubleVar(control, value = self.control_defaults[1])
-        self.Kp_o = DoubleVar(control, value = self.control_defaults[2])
-        self.Ki_o = DoubleVar(control, value = self.control_defaults[3])
-        self.Kp_o2 = DoubleVar(control, value = self.control_defaults[4])
+        self.Kp_i = StringVar(control, value = self.control_defaults[0])
+        self.Kd_i = StringVar(control, value = self.control_defaults[1])
+        self.Kp_o = StringVar(control, value = self.control_defaults[2])
+        self.Ki_o = StringVar(control, value = self.control_defaults[3])
+        self.Kp_o2 = StringVar(control, value = self.control_defaults[4])
         label_kpi = Label(control, text = "KP - Plate")
         label_kdi = Label(control, text = "KD - Plate")
         label_kpo = Label(control, text = "KP - Velocity")
