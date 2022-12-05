@@ -11,6 +11,7 @@ simulations without issue.
 import sympy as sym
 import numpy as np
 from sympy import cos, sin, tan, S
+import time
 
 class System():
     """Simulates the simplified case of two rigid legs 'walking' in responce to externally applied torques.
@@ -130,9 +131,11 @@ class System():
             
             # Lets build equation 1:
             eq1 = sym.Eq(dldqd.subs(sym_subs_p) - dldqd, lamb * dphidq)
+            eq1 = sym.simplify(eq1)
 
             # Lets build equation 2:
             eq2 = sym.Eq(sym.Matrix([0]), H.subs(sym_subs_p) - H)
+            eq2 = sym.simplify(eq2)
             e.col_update_equ = [eq1, eq2]
  
     def compute_collision(self,s,n):
@@ -150,6 +153,7 @@ class System():
                   collision.
         @returns the post-collision system state variable
         """
+        tic = time.time()
         lamb = sym.symbols('lambda')
         equations = self.col_cons[n].col_update_equ
         update_subs = {self.q_dum[0]:s[0],
@@ -160,15 +164,41 @@ class System():
                        self.qd_dum[1]:s[5], 
                        self.qd_dum[2]:s[6], 
                        self.qd_dum[3]:s[7]}
-        eq1 = equations[0].subs(update_subs) 
-        eq2 = equations[1].subs(update_subs) 
-        sols = sym.solve([eq1, eq2],self.qd_dum_p + [lamb], dict = True, quick = True)
-        # Lets pick only the non-trivial solution. 
+        self.log(tic - time.time())
+        eq1 = equations[0].xreplace(update_subs)
+        eq2 = equations[1].xreplace(update_subs)
+        self.log(tic - time.time())
+        x0 = s[3:]+ [-6] # initialize solver with inversed velocities. 
+        args = self.qd_dum_p + [lamb]
+        print(eq1)
+        print(eq2)
+        print(args)
+        print(x0)
+        #sols = sym.solve([eq1, eq2],args, dict = True)
+        ### nsolve testing ###
+        eq1_0 = eq1.rhs - eq1.lhs
+        eq2_0 = eq2.rhs - eq2.lhs
+        
+        ## Solve the equation
+        attempts = 20
         sol = ''
-        for i  in sols:
-            if abs(i[lamb])> 10**-9:
-                sol = i 
+        for n in range(attempts):
+            x0 = np.random.random(5)*10 - 5
+            try:
+                sols = sym.nsolve([eq1_0[0], eq1_0[1],eq1_0[2],eq1_0[3],eq2_0],args, x0, dict = True, verify = False)[0]
+            except:
+                print("solve broke") 
+            print("n",n,"sols",sols)
+            if abs(sols[lamb]) > 1e-9:
+                sol = sols
+                break
+         
         self.log(sol) 
+        toc = time.time()
+        self.log(tic - toc)
+        print("sol", sol)
+        print("sol type", type(sol))
+        print("qd_dum_p", self.qd_dum_p)
         return([np.float64(s[0]),
                 np.float64(s[1]),
                 np.float64(s[2]),

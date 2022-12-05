@@ -34,7 +34,7 @@ class gui():
         self.height = self.sys.el*(1 + boarder) # height of canvas. 
         self.initial_state = [-0.1,self.height*0.8,-np.pi/4,np.pi, 0,0,0,0]
         self.state = self.initial_state
-        self.dt = 0.005 # how long to jump the simulation each time step.
+        self.dt = 0.002 # how long to jump the simulation each time step.
         # Transform to move from simulation coordinates to gui coordinates.
         self.g_cw = self.sys.build_G(self.sys.build_R(-np.pi),
                                     [self.width/2,
