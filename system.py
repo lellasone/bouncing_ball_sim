@@ -131,11 +131,11 @@ class System():
             
             # Lets build equation 1:
             eq1 = sym.Eq(dldqd.subs(sym_subs_p) - dldqd, lamb * dphidq)
-            eq1 = sym.simplify(eq1)
+            eq1 = sym.N(sym.simplify(eq1))
 
             # Lets build equation 2:
             eq2 = sym.Eq(sym.Matrix([0]), H.subs(sym_subs_p) - H)
-            eq2 = sym.simplify(eq2)
+            eq2 = sym.N(sym.simplify(eq2))
             e.col_update_equ = [eq1, eq2]
  
     def compute_collision(self,s,n):
@@ -165,30 +165,31 @@ class System():
                        self.qd_dum[2]:s[6], 
                        self.qd_dum[3]:s[7]}
         self.log(tic - time.time())
+        #print(equations)
         eq1 = equations[0].xreplace(update_subs)
         eq2 = equations[1].xreplace(update_subs)
         self.log(tic - time.time())
         x0 = s[3:]+ [-6] # initialize solver with inversed velocities. 
         args = self.qd_dum_p + [lamb]
-        print(eq1)
-        print(eq2)
-        print(args)
-        print(x0)
+        #print(eq1)
+        #print(eq2)
+        #print(args)
+        #print(x0)
         #sols = sym.solve([eq1, eq2],args, dict = True)
         ### nsolve testing ###
         eq1_0 = eq1.rhs - eq1.lhs
         eq2_0 = eq2.rhs - eq2.lhs
-        
+        self.log(tic - time.time()) 
         ## Solve the equation
         attempts = 20
         sol = ''
         for n in range(attempts):
             x0 = np.random.random(5)*10 - 5
             try:
-                sols = sym.nsolve([eq1_0[0], eq1_0[1],eq1_0[2],eq1_0[3],eq2_0],args, x0, dict = True, verify = False)[0]
+                sols = sym.nsolve([eq1_0[0], eq1_0[1],eq1_0[2],eq1_0[3],eq2_0],args, x0, dict = True, verify = False, prec=5)[0]
             except:
                 print("solve broke") 
-            print("n",n,"sols",sols)
+            #print("n",n,"sols",sols)
             if abs(sols[lamb]) > 1e-9:
                 sol = sols
                 break
